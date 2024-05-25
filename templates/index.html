@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web IDE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/addon/hint/show-hint.min.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Courier New', Courier, monospace;
+            background-image: url('background.jpg'); /* Background image for the entire document */
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            overflow: hidden;
+        }
+        .CodeMirror {
+            flex: 1;
+            height: calc(100% - 50px); /* Adjust height to accommodate footer */
+            background-color: transparent;
+        }
+        .footer {
+            display: flex;
+            justify-content: flex-end;
+            padding: 10px;
+            background: transparent; /* Fully transparent background */
+            border-top: 1px solid transparent;
+        }
+        .footer.dark-theme {
+            background: #333; /* Solid background in dark mode */
+        }
+        button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            border: 1px solid #007bff;
+            background-color: transparent; /* Transparent background */
+            color: #007bff;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #007bff;
+            color: white;
+        }
+        .theme-toggle {
+            font-size: 18px;
+            background-color: transparent;
+            border: none;
+            color: #000;
+        }
+        .dark-theme button {
+            border-color: #fff;
+            color: #fff;
+        }
+        .dark-theme button:hover {
+            background-color: #fff;
+            color: #000;
+        }
+        .dark-theme .theme-toggle {
+            color: #fff;
+        }
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; 
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; 
+        }
+        .modal-content pre {
+            white-space: pre-wrap; /* Allow line breaks in the output */
+            word-wrap: break-word;  /* Break long words in the output */
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .dark-theme .modal-content {
+            background-color: #333;
+            color: #fff;
+        }
+    </style>
+</head>
+<body class="light-theme">
+    <div class="container">
+        <textarea id="code" name="code"></textarea>
+        <div class="footer">
+            <button onclick="openFile()">Open</button>
+            <button onclick="saveCode()">Save</button>
+            <button onclick="runCode()">Run</button>
+            <button onclick="backupCode()">Backup</button>
+            <button onclick="showTerminal()">Show Terminal</button>
+            <button onclick="showSettings()">Settings</button>
+            <button class="theme-toggle" onclick="toggleTheme()">🌞</button>
+        </div>
+    </div>
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <pre id="output"></pre>
+        </div>
+    </div>
+    <div id="terminalModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeTerminalModal()">&times;</span>
+            <pre id="terminal"></pre>
+            <input type="text" id="terminalCommand" placeholder="Enter command here" style="width: 100%; margin-top: 10px;">
+            <button onclick="sendCommand()">Execute</button>
+            <input type="password" id="terminalPassword" placeholder="Enter sudo password here" style="width: 100%; margin-top: 10px;">
+        </div>
+    </div>
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeSettingsModal()">&times;</span>
+            <h3>Settings</h3>
+            <div>
+                <label for="bgColor">Background Color: </label>
+                <input type="color" id="bgColor" name="bgColor">
+                <button onclick="changeBgColor()">Apply</button>
+            </div>
+            <div>
+                <label for="bgImage">Background Image URL: </label>
+                <input type="text" id="bgImage" name="bgImage">
+                <button onclick="changeBgImage()">Apply</button>
+            </div>
+            <div>
+                <label for="uploadImage">Upload Image: </label>
+                <input type="file" id="uploadImage" accept="image/*">
+                <button onclick="uploadImage()">Apply</button>
+            </div>
+            <div>
+                <label for="langSelect">Language: </label>
+                <select id="langSelect" onchange="changeLanguage()">
+                    <option value="python">Python</option>
+                    <option value="cpp">C++</option>
+                    <option value="c">C</option>
+                    <option value="rust">Rust</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/mode/rust/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.62.0/addon/hint/anyword-hint.min.js"></script>
+    <script>
+         var editor;
+        document.addEventListener("DOMContentLoaded", function() {
+            editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+                lineNumbers: true,
+                mode: "python",
+                theme: "dracula",
+                extraKeys: {"Ctrl-Space": "autocomplete"}
+            });
+
+            // Load code from local storage if available
+            if (localStorage.getItem('code')) {
+                editor.setValue(localStorage.getItem('code'));
+            }
+
+            // Save code to local storage whenever it changes
+            editor.on('change', function() {
+                localStorage.setItem('code', editor.getValue());
+            });
+        });
+
+
+        async function openFile() {
+            const [fileHandle] = await window.showOpenFilePicker();
+            const file = await fileHandle.getFile();
+            const contents = await file.text();
+            editor.setValue(contents);
+            detectLanguage(file.name);
+        }
+
+        async function saveCode() {
+            const fileHandle = await window.showSaveFilePicker();
+            const writable = await fileHandle.createWritable();
+            await writable.write(editor.getValue());
+            await writable.close();
+        }
+
+        function detectLanguage(filename) {
+            const extension = filename.split('.').pop();
+            let mode = 'python';
+            switch (extension) {
+                case 'cpp':
+                case 'c++':
+                case 'cc':
+                case 'cxx':
+                    mode = 'text/x-c++src';
+                    break;
+                case 'c':
+                    mode = 'text/x-csrc';
+                    break;
+                case 'rs':
+                    mode = 'rust';
+                    break;
+                default:
+                    mode = 'python';
+                    break;
+            }
+            editor.setOption('mode', mode);
+            document.getElementById('langSelect').value = mode;
+        }
+
+        function changeLanguage() {
+            const lang = document.getElementById('langSelect').value;
+            let mode = 'python';
+            switch (lang) {
+                case 'cpp':
+                    mode = 'text/x-c++src';
+                    break;
+                case 'c':
+                    mode = 'text/x-csrc';
+                    break;
+                case 'rust':
+                    mode = 'rust';
+                    break;
+                default:
+                    mode = 'python';
+                    break;
+            }
+            editor.setOption('mode', mode);
+        }
+
+        function runCode() {
+            var code = editor.getValue();
+            var filename = prompt("Enter file name:", "temp_code");
+            if (filename) {
+                const extension = document.getElementById('langSelect').value;
+                if (extension === 'text/x-c++src') filename += '.cpp';
+                else if (extension === 'text/x-csrc') filename += '.c';
+                else if (extension === 'rust') filename += '.rs';
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/run', true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState == XMLHttpRequest.DONE) {
+                        var output = document.getElementById("output");
+                        output.textContent = xhr.responseText; // Show the result in the modal
+                        showModal();
+                    }
+                };
+                xhr.send('filename=' + encodeURIComponent(filename) + '&code=' + encodeURIComponent(code));
+            }
+        }
+
+        function backupCode() {
+            var code = editor.getValue();
+            var filename = prompt("Enter file name for backup:", "backup_code.py");
+            if (filename) {
+                var blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+                var link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+            document.body.classList.toggle('dark-theme');
+            var themeButton = document.querySelector('.theme-toggle');
+            themeButton.textContent = themeButton.textContent === '🌞' ? '🌜' : '🌞';
+            editor.setOption('theme', document.body.classList.contains('dark-theme') ? 'dracula' : 'default');
+        }
+
+        function showTerminal() {
+            var terminalModal = document.getElementById("terminalModal");
+            terminalModal.style.display = "block";
+            var terminal = document.getElementById("terminal");
+            terminal.textContent = "Terminal opened. Waiting for commands..."; // Placeholder content for terminal
+        }
+
+        function sendCommand() {
+            var command = document.getElementById("terminalCommand").value;
+            var password = document.getElementById("terminalPassword").value;
+            if (command) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/terminal', true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState == XMLHttpRequest.DONE) {
+                        var response = JSON.parse(xhr.responseText);
+                        var terminal = document.getElementById("terminal");
+                        terminal.textContent = response.stdout + response.stderr;
+                        document.getElementById("terminalCommand").value = "";
+                    }
+                };
+                xhr.send('command=' + encodeURIComponent(command) + '&password=' + encodeURIComponent(password));
+            }
+        }
+
+        function showModal() {
+            var modal = document.getElementById("myModal");
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            var modal = document.getElementById("myModal");
+            modal.style.display = "none";
+        }
+
+        function closeTerminalModal() {
+            var terminalModal = document.getElementById("terminalModal");
+            terminalModal.style.display = "none";
+        }
+
+        function showSettings() {
+            var settingsModal = document.getElementById("settingsModal");
+            settingsModal.style.display = "block";
+        }
+
+        function closeSettingsModal() {
+            var settingsModal = document.getElementById("settingsModal");
+            settingsModal.style.display = "none";
+        }
+
+        function changeBgColor() {
+            var color = document.getElementById("bgColor").value;
+            document.querySelector('.container').style.backgroundColor = color;
+            document.querySelector('.container').style.backgroundImage = ''; // Remove any background image
+        }
+
+        function changeBgImage() {
+            var imageUrl = document.getElementById("bgImage").value;
+            document.querySelector('.container').style.backgroundImage = 'url(' + imageUrl + ')';
+            document.querySelector('.container').style.backgroundSize = 'cover';
+        }
+
+        function uploadImage() {
+            var input = document.getElementById("uploadImage");
+            var file = input.files[0];
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var imageUrl = e.target.result;
+                document.querySelector('.container').style.backgroundImage = 'url(' + imageUrl + ')';
+                document.querySelector('.container').style.backgroundSize = 'cover';
+            };
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+</html>
