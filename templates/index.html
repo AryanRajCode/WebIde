@@ -186,12 +186,11 @@
                 extraKeys: {"Ctrl-Space": "autocomplete"}
             });
 
-            // Load code from local storage if available
+         
             if (localStorage.getItem('code')) {
                 editor.setValue(localStorage.getItem('code'));
             }
 
-            // Save code to local storage whenever it changes
             editor.on('change', function() {
                 localStorage.setItem('code', editor.getValue());
             });
